@@ -3,7 +3,7 @@ from display_image import display_and_select_image
 
 def image_generation_loop(initial_prompt):
     prompt = initial_prompt
-    temperature = 0.7  # Default temperature
+    temperature = 1.0  # Default temperature
     temperatures = []  # To store temperature for each iteration
     selected_images = []
     generated_image_sets = []
@@ -22,16 +22,18 @@ def image_generation_loop(initial_prompt):
         print(f"Current temperature for this iteration: {current_temperature}")
 
         # Generate images if they have not been generated or need regeneration
-        generated_images = generate_images(prompt, num_images=num_images, resolution=resolution, temp=current_temperature, base_image=base_image)
-        generated_image_sets.append(generated_images) if iteration >= len(generated_image_sets) else generated_image_sets[iteration]
+        if iteration >= len(generated_image_sets):
+            generated_images = generate_images(prompt, num_images=num_images, resolution=resolution, temp=current_temperature, base_image=base_image)
+            generated_image_sets.append(generated_images)
+        else:
+            generated_images = generated_image_sets[iteration]
 
         selected_image = display_and_select_image(generated_images, resolution, iteration)
 
         while True:  # User input loop
-            user_input = input("Options: type 'regenerate' to recreate images, 'restart' to start over, 'reselect' to choose previous image again, 'stop' to exit, 'prompt' to change prompt, or 'temperature' to change temperature: ").strip().lower()
+            user_input = input("Options: type 'regenerate' to recreate images, 'restart' to start over, 'reselect' to choose previous image again, 'stop' to exit, 'prompt' to change prompt, 'temperature' to change temperature, or 'continue' to proceed to the next iteration: ").strip().lower()
 
             if user_input == "regenerate":
-                # Regenerate images using current settings but do not advance the iteration
                 generated_images = generate_images(prompt, num_images=num_images, resolution=resolution, temp=current_temperature, base_image=base_image)
                 generated_image_sets[iteration] = generated_images
                 selected_image = display_and_select_image(generated_images, resolution, iteration)
@@ -63,11 +65,11 @@ def image_generation_loop(initial_prompt):
                 except ValueError:
                     print("Invalid temperature input. Using previous temperature.")
                 continue
+            elif user_input == "continue":
+                break  # Exit the loop to move to the next iteration
             else:
                 print("Invalid option. Please enter a valid command.")
                 continue
-
-            break
 
         if selected_image is None:
             print("No image selected, exiting.")
@@ -82,6 +84,6 @@ def image_generation_loop(initial_prompt):
         if iteration >= len(temperatures):
             temperatures.append(current_temperature)  # Ensure each iteration's temperature is recorded
 
-        iteration += 1  # Move to the next iteration only when ready
+        iteration += 1  # Move to the next iteration only when ready or 'continue' is selected
 
     return selected_images
