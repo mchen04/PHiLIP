@@ -1,20 +1,14 @@
-from generate_image import generate_images
-from display_image import display_and_select_image
-import torch
+from image_generation_loop import image_generation_loop
 
 def main():
-    prompt = "Envision Gloomvale, a city bathed in eternal twilight, dominated by gothic spires and Victorian architecture. Ancient cobblestone streets weave through a dense, omnipresent fog. The towering Clock Tower, constructed from iron and brass, is lit by flickering gas lamps. Ivy-draped buildings cast long shadows, imbuing the air with an aura of mystery."
-
-    selected_image = None
-    resolutions = [256, 512, 1024]
-    num_images_list = [3, 2, 1]
-
-    for resolution, num_images in zip(resolutions, num_images_list):
-        generated_images = generate_images(prompt, num_images=num_images, resolution=resolution, temp=1.0, base_image=selected_image)
-        selected_image = display_and_select_image(generated_images, resolution)
-        if selected_image is None:
-            print("No image selected, stopping.")
-            break
+    prompt = 
+"Envision a cyberpunk Shanghai at night, where neon blues and purples light up rain-slick skyscrapers and misty streets. The city glows with cybernetic ads and dynamic billboards, illustrating a blend of high technology and urban decay."
+    
+    final_images = image_generation_loop(prompt)
+    if final_images:
+        print("Image generation completed successfully.")
+    else:
+        print("Image generation did not complete successfully.")
 
 if __name__ == "__main__":
     main()
