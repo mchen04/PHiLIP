@@ -5,7 +5,12 @@ import os
 def display_and_select_image(images, resolution, iteration):
     """Displays images, prompts the user to select their favorite, and saves all images."""
     num_images = len(images)
-    fig, axs = plt.subplots(1, num_images, figsize=(5 * num_images, 5))
+    if num_images == 1:
+        fig, axs = plt.subplots(1, num_images, figsize=(5, 5))
+        axs = [axs]  # Make axs a list even if there is only one subplot
+    else:
+        fig, axs = plt.subplots(1, num_images, figsize=(5 * num_images, 5))
+
     for i, img in enumerate(images):
         axs[i].imshow(img if isinstance(img, np.ndarray) else np.array(img))
         axs[i].axis('off')
