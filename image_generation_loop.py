@@ -3,7 +3,7 @@ from display_image import display_and_select_image
 
 def image_generation_loop(initial_prompt):
     prompt = initial_prompt
-    temperature = 1.0  # Default temperature
+    temperature = 0.7  # Default temperature
     temperatures = []  # To store temperature for each iteration
     selected_images = []
     generated_image_sets = []
@@ -16,12 +16,10 @@ def image_generation_loop(initial_prompt):
         num_images = num_images_list[iteration]
         base_image = selected_images[-1] if selected_images and iteration > 0 else None
 
-        # Use the specific temperature for the current iteration or the default if not set
         current_temperature = temperatures[iteration] if iteration < len(temperatures) else temperature
         print(f"Current prompt: {prompt}")
         print(f"Current temperature for this iteration: {current_temperature}")
 
-        # Generate images if they have not been generated or need regeneration
         if iteration >= len(generated_image_sets):
             generated_images = generate_images(prompt, num_images=num_images, resolution=resolution, temp=current_temperature, base_image=base_image)
             generated_image_sets.append(generated_images)
@@ -30,7 +28,7 @@ def image_generation_loop(initial_prompt):
 
         selected_image = display_and_select_image(generated_images, resolution, iteration)
 
-        while True:  # User input loop
+        while True:
             user_input = input("Options: type 'regenerate' to recreate images, 'restart' to start over, 'reselect' to choose previous image again, 'stop' to exit, 'prompt' to change prompt, 'temperature' to change temperature, or 'continue' to proceed to the next iteration: ").strip().lower()
 
             if user_input == "regenerate":
@@ -75,7 +73,6 @@ def image_generation_loop(initial_prompt):
             print("No image selected, exiting.")
             return
 
-        # Manage the selection and temperatures for each iteration
         if len(selected_images) > iteration:
             selected_images[iteration] = selected_image
         else:
