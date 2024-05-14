@@ -1,15 +1,9 @@
-from diffusers import PixArtAlphaPipeline
-import numpy as np
+from cldm import CLDM, generate_cascaded_images
 
-# Initialize the pipeline globally to load the model only once
-pipe = PixArtAlphaPipeline.from_pretrained("PixArt-alpha/PixArt-XL-2-1024-MS")
+# Initialize the CLDM model globally to load the models only once
+cldm = CLDM("PixArt-alpha/PixArt-XL-2-512x512", "PixArt-alpha/PixArt-XL-2-1024-MS")
 
 def generate_images(prompt, num_images=1, resolution=256, temp=0.7, base_image=None):
     """Generates a specified number of images at a specified resolution."""
-    if base_image is not None:
-        input_image = np.array(base_image)  # Convert PIL image to numpy if not already
-    else:
-        input_image = None
-
-    images = [pipe(prompt, num_images=1, resolution=resolution, guidance_scale=temp, base_image=input_image, return_tensors=False).images[0] for _ in range(num_images)]
+    images = generate_cascaded_images(cldm, prompt, [256, 512, 1024], [3, 2, 1], temp)
     return images
