@@ -32,12 +32,12 @@ def display_and_select_image(images, resolution, iteration):
         choice = input(f"Select your favorite image (1-{num_images}), or type 'stop' to exit: ").strip()
 
         if choice.lower() == 'stop':
-            return "stop"
+            return None
         elif choice.isdigit() and 1 <= int(choice) <= num_images:
             favorite_index = int(choice) - 1
             favorite_image = images[favorite_index]
             new_path = os.path.join(image_folder, f"image_{resolution}px_selected.png")
-            os.rename(os.path.join(image_folder, f"image_{resolution}px_{choice}.png"), new_path)
+            os.rename(os.path.join(image_folder, f"image_{resolution}px_{favorite_index + 1}.png"), new_path)
             print(f"Your favorite image {choice} has been renamed to 'image_{resolution}px_selected.png'")
             return favorite_image
         else:
