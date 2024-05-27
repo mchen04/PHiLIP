@@ -24,21 +24,24 @@ def display_and_select_image(images, resolution, iteration):
         os.makedirs(image_folder)
 
     for i, img in enumerate(images):
-        file_path = os.path.join(image_folder, f"image_{resolution}px_{i+1}.png")
+        file_path = os.path.join(image_folder, f"{resolution}-{i+1}.png")
         plt.imsave(file_path, img if isinstance(img, np.ndarray) else np.array(img))
         print(f"Image {i+1} saved as {file_path}")
 
+    selected_images = []
     while True:
-        choice = input(f"Select your favorite image (1-{num_images}), or type 'stop' to exit: ").strip()
+        choice = input(f"Select your favorite images (1-{num_images}), separated by commas, or type 'stop' to exit: ").strip()
 
         if choice.lower() == 'stop':
             return None
-        elif choice.isdigit() and 1 <= int(choice) <= num_images:
-            favorite_index = int(choice) - 1
-            favorite_image = images[favorite_index]
-            new_path = os.path.join(image_folder, f"image_{resolution}px_selected.png")
-            os.rename(os.path.join(image_folder, f"image_{resolution}px_{favorite_index + 1}.png"), new_path)
-            print(f"Your favorite image {choice} has been renamed to 'image_{resolution}px_selected.png'")
-            return favorite_image
         else:
-            print(f"Invalid input. Please enter a number between 1 and {num_images} or 'stop' to exit.")
+            try:
+                selected_indices = [int(x) - 1 for x in choice.split(',')]
+                selected_images = [images[i] for i in selected_indices if 0 <= i < num_images]
+                for i in selected_indices:
+                    new_path = os.path.join(image_folder, f"{resolution}-selected-{i+1}.png")
+                    os.rename(os.path.join(image_folder, f"{resolution}-{i+1}.png"), new_path)
+                    print(f"Your favorite image {i+1} has been renamed to '{resolution}-selected-{i+1}.png'")
+                return selected_images
+            except ValueError:
+                print(f"Invalid input. Please enter numbers between 1 and {num_images} separated by commas or 'stop' to exit.")
