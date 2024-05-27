@@ -11,45 +11,43 @@ def clear_generated_images_folder(folder="generated_images"):
     os.makedirs(folder)
 
 def image_generation_loop(initial_prompt):
-    # Clear the generated_images folder at the start
     clear_generated_images_folder()
 
     prompt = initial_prompt
-    temperature = 1.0  # Default temperature
+    temperature = 0.5  # Default temperature
     temperatures = []  # To store temperature for each iteration
     selected_images = []
     generated_image_sets = []
-    resolutions = [256, 512, 1024]
-    num_images_list = [3, 2, 1]
-    mask_fractions = [0.4, 0.3, 0.1]  # Progressive masking fractions
+    resolutions = [512, 1024]
+    num_images_list = [9, 1]
+    inference_steps = [5, 10]  # Default inference steps for each stage
     iteration = 0
 
     while iteration < len(resolutions):
         resolution = resolutions[iteration]
         num_images = num_images_list[iteration]
-        mask_fraction = mask_fractions[iteration]
-        base_image = selected_images[-1] if selected_images and iteration > 0 else None
+        steps = inference_steps[iteration]
+        base_images = selected_images if selected_images and iteration > 0 else None
 
-        # Use the specific temperature for the current iteration or the default if not set
         current_temperature = temperatures[iteration] if iteration < len(temperatures) else temperature
         print(f"Current prompt: {prompt}")
         print(f"Current temperature for this iteration: {current_temperature}")
+        print(f"Current inference steps for this iteration: {steps}")
 
-        # Generate images if they have not been generated or need regeneration
         if iteration >= len(generated_image_sets):
-            generated_images = generate_images(prompt, num_images=num_images, resolution=resolution, temp=current_temperature, base_image=base_image, mask_fraction=mask_fraction)
+            generated_images = generate_images(prompt, num_images=num_images, resolution=resolution, temp=current_temperature, base_images=base_images, steps=steps)
             generated_image_sets.append(generated_images)
         else:
             generated_images = generated_image_sets[iteration]
 
-        selected_image = display_and_select_image(generated_images, resolution, iteration)
+        selected_images = display_and_select_image(generated_images, resolution, iteration)
 
         user_input = handle_user_input()
 
         if user_input == "regenerate":
-            generated_images = generate_images(prompt, num_images=num_images, resolution=resolution, temp=current_temperature, base_image=base_image, mask_fraction=mask_fraction)
+            generated_images = generate_images(prompt, num_images=num_images, resolution=resolution, temp=current_temperature, base_images=selected_images, steps=steps)
             generated_image_sets[iteration] = generated_images
-            selected_image = display_and_select_image(generated_images, resolution, iteration)
+            selected_images = display_and_select_image(generated_images, resolution, iteration)
             continue
         elif user_input == "restart":
             selected_images = []
@@ -78,22 +76,21 @@ def image_generation_loop(initial_prompt):
             except ValueError:
                 print("Invalid temperature input. Using previous temperature.")
             continue
+        elif user_input == "inference steps":
+            try:
+                new_steps = int(input("Enter new inference steps (positive integer): "))
+                inference_steps[iteration] = new_steps
+                steps = new_steps
+            except ValueError:
+                print("Invalid steps input. Using previous steps.")
+            continue
         elif user_input == "continue":
-            pass  # Exit the loop to move to the next iteration
+            pass
 
-        if selected_image is None:
-            print("No image selected, exiting.")
+        if selected_images is None:
+            print("No images selected, exiting.")
             return
 
-        # Manage the selection and temperatures for each iteration
-        if len(selected_images) > iteration:
-            selected_images[iteration] = selected_image
-        else:
-            selected_images.append(selected_image)
-
-        if iteration >= len(temperatures):
-            temperatures.append(current_temperature)  # Ensure each iteration's temperature is recorded
-
-        iteration += 1  # Move to the next iteration only when ready or 'continue' is selected
+        iteration += 1
 
     return selected_images
