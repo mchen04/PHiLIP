@@ -1,7 +1,7 @@
 from image_generation_loop import image_generation_loop
 
 def main():
-    prompt = ("From above, Shanghai unfolds where tradition meets the future. Neon dragons twist around skyscrapers, casting an otherworldly glow. Stone lions oversee silk markets under neon's flicker, merging past with cybernetic prospects. The vast Huangpu River mirrors a dance of lights, blending centuries in its reflection, depicting a cityscape where historical and futuristic elements coexist in a vibrant tableau.")
+    prompt = ("Above the grey fog lies a serene, otherworldly expanse. The indigo sky glimmers with distant stars and glowing celestial bodies, casting soft hues across floating islands of bioluminescent flora. The silence is profound, broken only by whispers of cosmic winds. This ethereal realm, where reality blurs and ancient magic pervades, unfolds the mysteries of the cosmos in a dance of light and shadow.")
 
     final_images = image_generation_loop(prompt)
     if final_images:
