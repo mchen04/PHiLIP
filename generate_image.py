@@ -30,12 +30,14 @@ def generate_images(prompt, num_images=1, resolution=512, temp=0.7, base_images=
 
     if base_images is not None:
         base_image_tensors = []
-        for base_image in base_images:
+        print(f"Using {len(base_images)} base images for generation:")
+        for i, base_image in enumerate(base_images):
             if isinstance(base_image, np.ndarray):
                 base_image = Image.fromarray(base_image)
             base_image_tensor = preprocess(base_image).unsqueeze(0).to("hip" if torch.cuda.is_available() else "cpu")
             base_image_tensors.append(base_image_tensor)
-        input_images = torch.cat(base_image_tensors, dim=0)
+            
+        input_images = torch.mean(torch.stack(base_image_tensors), dim=0)
     else:
         input_images = None
 
