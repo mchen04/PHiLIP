@@ -10,87 +10,70 @@ def clear_generated_images_folder(folder="generated_images"):
         shutil.rmtree(folder)
     os.makedirs(folder)
 
-def image_generation_loop(initial_prompt):
-    clear_generated_images_folder()
+def image_generation_loop():
+    while True:
+        clear_generated_images_folder()
 
-    prompt = initial_prompt
-    temperature = 0.5  # Default temperature
-    temperatures = []  # To store temperature for each iteration
-    selected_images = []
-    generated_image_sets = []
-    resolutions = [512, 1024]
-    num_images_list = [9, 1]
-    inference_steps = [5, 10]  # Default inference steps for each stage
-    iteration = 0
-
-    while iteration < len(resolutions):
-        resolution = resolutions[iteration]
-        num_images = num_images_list[iteration]
-        steps = inference_steps[iteration]
-        base_images = selected_images if selected_images and iteration > 0 else None
-
-        current_temperature = temperatures[iteration] if iteration < len(temperatures) else temperature
-        print(f"Current prompt: {prompt}")
-        print(f"Current temperature for this iteration: {current_temperature}")
-        print(f"Current inference steps for this iteration: {steps}")
-
-        if iteration >= len(generated_image_sets):
-            generated_images = generate_images(prompt, num_images=num_images, resolution=resolution, temp=current_temperature, base_images=base_images, steps=steps)
-            generated_image_sets.append(generated_images)
-        else:
-            generated_images = generated_image_sets[iteration]
-
-        selected_images = display_and_select_image(generated_images, resolution, iteration)
-
-        user_input = handle_user_input()
-
-        if user_input == "regenerate":
-            generated_images = generate_images(prompt, num_images=num_images, resolution=resolution, temp=current_temperature, base_images=selected_images, steps=steps)
-            generated_image_sets[iteration] = generated_images
-            selected_images = display_and_select_image(generated_images, resolution, iteration)
-            continue
-        elif user_input == "restart":
-            selected_images = []
-            generated_image_sets = []
-            temperatures = []
-            iteration = 0
-            continue
-        elif user_input == "reselect":
-            iteration = max(0, iteration - 1)
-            continue
-        elif user_input == "stop":
-            print("User requested to stop. Exiting.")
-            return
-        elif user_input == "prompt":
-            prompt = input("Enter new prompt: ")
-            continue
-        elif user_input == "temperature":
+        prompt = input("Enter a prompt for image generation: ").strip()
+        
+        while True:
             try:
-                new_temp = float(input("Enter new temperature (suggested range from 0.5 to 1.5): "))
-                temperature = new_temp
-                if iteration == len(temperatures):
-                    temperatures.append(temperature)
+                temperature = float(input("Enter the temperature for image generation (suggested range from 0.5 to 1.5): ").strip())
+                if 0.5 <= temperature <= 1.5:
+                    break
                 else:
-                    temperatures[iteration] = temperature
-                current_temperature = temperature
+                    print("Please enter a temperature within the suggested range from 0.5 to 1.5.")
             except ValueError:
-                print("Invalid temperature input. Using previous temperature.")
-            continue
-        elif user_input == "inference steps":
-            try:
-                new_steps = int(input("Enter new inference steps (positive integer): "))
-                inference_steps[iteration] = new_steps
-                steps = new_steps
-            except ValueError:
-                print("Invalid steps input. Using previous steps.")
-            continue
-        elif user_input == "continue":
-            pass
+                print("Invalid input. Please enter a valid number for temperature.")
 
-        if selected_images is None:
-            print("No images selected, exiting.")
-            return
+        selected_images = []
+        resolutions = [512, 1024]
+        num_images_list = [9, 1]
+        inference_steps = [5, 10] 
+        iteration = 0
 
-        iteration += 1
+        while iteration < len(resolutions):
+            resolution = resolutions[iteration]
+            num_images = num_images_list[iteration]
+            steps = inference_steps[iteration]
+            base_images = selected_images if selected_images and iteration > 0 else None
 
-    return selected_images
+            print(f"Generating images for prompt: {prompt}")
+            print(f"Temperature for this iteration: {temperature}")
+
+            generated_images = generate_images(prompt, num_images=num_images, resolution=resolution, temp=temperature, base_images=base_images, steps=steps)
+
+            selected_images = display_and_select_image(generated_images, resolution, iteration)
+
+            if selected_images is None:
+                print("No images selected. Restarting with a new prompt and temperature.")
+                break
+
+            if iteration == 1:  # When at 1024 resolution, provide limited options
+                user_input = input("Options: type 'regenerate' to recreate images, 'restart' to start over, or 'stop' to exit: ").strip().lower()
+                if user_input == "regenerate":
+                    continue
+                elif user_input == "restart":
+                    break
+                elif user_input == "stop":
+                    print("User requested to stop. Exiting.")
+                    return
+            else:
+                user_input = handle_user_input()
+
+                if user_input == "regenerate":
+                    continue
+                elif user_input == "reselect":
+                    iteration = max(0, iteration - 1)
+                    continue
+                elif user_input == "stop":
+                    print("User requested to stop. Exiting.")
+                    return
+                elif user_input == "continue":
+                    pass
+
+            iteration += 1
+
+        if iteration == len(resolutions):
+            print("Image generation completed successfully.")
+            return selected_images
