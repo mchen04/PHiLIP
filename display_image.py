@@ -7,7 +7,7 @@ def display_and_select_image(images, resolution, iteration):
     num_images = len(images)
     if num_images == 1:
         fig, axs = plt.subplots(1, num_images, figsize=(5, 5))
-        axs = [axs]  # Make axs a list even if there is only one subplot
+        axs = [axs] 
     else:
         fig, axs = plt.subplots(1, num_images, figsize=(5 * num_images, 5))
 
