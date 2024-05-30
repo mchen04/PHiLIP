@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import os
+import os 
 
 def display_and_select_image(images, resolution, iteration):
     """Displays images, prompts the user to select their favorite, and saves all images."""
