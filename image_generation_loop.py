@@ -29,7 +29,7 @@ def image_generation_loop():
         selected_images = []
         resolutions = [512, 1024]
         num_images_list = [9, 1]
-        inference_steps = [5, 10] 
+        inference_steps = [5, 11] 
         iteration = 0
 
         while iteration < len(resolutions):
