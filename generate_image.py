@@ -3,7 +3,7 @@ import torch
 from diffusers import PixArtAlphaPipeline
 from torchvision import transforms
 from PIL import Image
-
+ 
 # Preprocessing pipeline for images
 preprocess = transforms.Compose([
     transforms.Resize(256),
