@@ -4,7 +4,7 @@ from generate_image import generate_images
 from display_image import display_and_select_image
 from user_input_handler import handle_user_input
 
-def clear_generated_images_folder(folder="generated_images"):
+def clear_generated_images_folder(folder="generated_images"): 
     """Clears all files in the generated_images folder."""
     if os.path.exists(folder):
         shutil.rmtree(folder)
