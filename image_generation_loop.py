@@ -3,8 +3,12 @@ import shutil
 from generate_image import generate_images
 from display_image import display_and_select_image
 from user_input_handler import handle_user_input
+from var_model_processing import process_images, generate_final_image
+from var_model_setup import vae, var  # Import the models
+import torch
+from torchvision import transforms
 
-def clear_generated_images_folder(folder="generated_images"): 
+def clear_generated_images_folder(folder="generated_images"):
     """Clears all files in the generated_images folder."""
     if os.path.exists(folder):
         shutil.rmtree(folder)
@@ -29,7 +33,7 @@ def image_generation_loop():
         selected_images = []
         resolutions = [512, 1024]
         num_images_list = [9, 1]
-        inference_steps = [5, 11] 
+        inference_steps = [4, 10]
         iteration = 0
 
         while iteration < len(resolutions):
@@ -49,31 +53,37 @@ def image_generation_loop():
                 print("No images selected. Restarting with a new prompt and temperature.")
                 break
 
-            if iteration == 1:  # When at 1024 resolution, provide limited options
-                user_input = input("Options: type 'regenerate' to recreate images, 'restart' to start over, or 'stop' to exit: ").strip().lower()
-                if user_input == "regenerate":
-                    continue
-                elif user_input == "restart":
-                    break
-                elif user_input == "stop":
-                    print("User requested to stop. Exiting.")
-                    return
-            else:
-                user_input = handle_user_input()
+            if iteration == 1:  # After selecting 512 resolution images
+                # Process the selected images with the VAR and VAE models
+                selected_image_paths = [os.path.join("generated_images", f"{resolution}-selected-{i+1}.png") for i in range(len(selected_images))]
+                device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-                if user_input == "regenerate":
-                    continue
-                elif user_input == "reselect":
-                    iteration = max(0, iteration - 1)
-                    continue
-                elif user_input == "stop":
-                    print("User requested to stop. Exiting.")
-                    return
-                elif user_input == "continue":
-                    pass
+                # Extract concepts using VQVAE
+                concepts = process_images(selected_image_paths, vae, var, device)
+
+                # Save concept images
+                concept_folder = "concept_images"
+                if not os.path.exists(concept_folder):
+                    os.makedirs(concept_folder)
+                    
+                for i, concept in enumerate(concepts):
+                    concept_image_path = os.path.join(concept_folder, f"concept_{i+1}.png")
+                    concept_image = transforms.ToPILImage()(concept.cpu().squeeze(0))
+                    concept_image.save(concept_image_path)
+                    print(f"Concept image {i+1} saved as {concept_image_path}")
+
+                # Generate final image using the extracted concepts
+                final_image = generate_final_image(concepts, prompt, temperature)
+                
+                # Save the final image
+                final_image_path = os.path.join("generated_images", "final_image.png")
+                final_image.save(final_image_path)
+                print(f"Final image generated and saved as {final_image_path}")
+
+                return final_image
 
             iteration += 1
 
         if iteration == len(resolutions):
             print("Image generation completed successfully.")
-            return selected_images
+
