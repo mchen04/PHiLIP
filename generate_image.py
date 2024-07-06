@@ -1,3 +1,5 @@
+# generate_image.py
+
 import numpy as np
 import torch
 from diffusers import PixArtAlphaPipeline
@@ -5,9 +7,11 @@ from torchvision import transforms
 from PIL import Image
 import logging
 from typing import List, Optional, Union
-from config import MODEL_MID_RES, MODEL_HIGH_RES
+from tqdm import tqdm
+from config import MODEL_MID_RES, MODEL_HIGH_RES, LOG_FORMAT, LOG_DATE_FORMAT
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
+logger = logging.getLogger(__name__)
 
 # Preprocessing pipeline for images
 preprocess = transforms.Compose([
@@ -27,12 +31,12 @@ def generate_images(prompt: str, num_images: int = 1, resolution: int = 512, tem
     Generate images based on the given prompt and parameters.
     
     Args:
-        prompt (str): The text prompt for image generation.
-        num_images (int): Number of images to generate.
-        resolution (int): Image resolution (512 or 1024).
-        temp (float): Temperature for generation guidance.
-        base_images (Optional[Union[List[np.ndarray], np.ndarray]]): Base images for generation.
-        steps (int): Number of inference steps.
+        prompt: The text prompt for image generation.
+        num_images: Number of images to generate.
+        resolution: Image resolution (512 or 1024).
+        temp: Temperature for generation guidance.
+        base_images: Base images for generation.
+        steps: Number of inference steps.
     
     Returns:
         List[np.ndarray]: List of generated images as numpy arrays.
@@ -52,11 +56,13 @@ def generate_images(prompt: str, num_images: int = 1, resolution: int = 512, tem
                 width=resolution,
                 guidance_scale=temp,
                 image=input_images,
-                num_inference_steps=steps
+                num_inference_steps=steps,
+                callback=lambda i, t, x: tqdm.write(f"Step {i}/{steps}", end="\r")
             )
+        logger.info(f"Generated {num_images} images successfully")
         return [np.array(image) for image in results.images]
     except Exception as e:
-        logging.error(f"Error during image generation: {str(e)}")
+        logger.error(f"Error during image generation: {str(e)}")
         return []
 
 def process_base_images(base_images: Union[List[np.ndarray], np.ndarray], device: str) -> torch.Tensor:
@@ -64,8 +70,8 @@ def process_base_images(base_images: Union[List[np.ndarray], np.ndarray], device
     Process base images for use in generation.
     
     Args:
-        base_images (Union[List[np.ndarray], np.ndarray]): Base images to process.
-        device (str): Device to use for processing.
+        base_images: Base images to process.
+        device: Device to use for processing.
     
     Returns:
         torch.Tensor: Processed base images as a tensor.
