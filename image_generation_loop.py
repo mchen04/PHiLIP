@@ -3,10 +3,6 @@ import shutil
 from generate_image import generate_images
 from display_image import display_and_select_image
 from user_input_handler import handle_user_input
-from var_model_processing import process_images, generate_final_image
-from var_model_setup import vae, var  # Import the models
-import torch
-from torchvision import transforms
 
 def clear_generated_images_folder(folder="generated_images"):
     """Clears all files in the generated_images folder."""
@@ -14,76 +10,95 @@ def clear_generated_images_folder(folder="generated_images"):
         shutil.rmtree(folder)
     os.makedirs(folder)
 
-def image_generation_loop():
-    while True:
-        clear_generated_images_folder()
+def image_generation_loop(initial_prompt):
+    # Clear the generated_images folder at the start
+    clear_generated_images_folder()
 
-        prompt = input("Enter a prompt for image generation: ").strip()
+    prompt = initial_prompt
+    temperature = 1.0  # Default temperature
+    temperatures = []  # To store temperature for each iteration
+    selected_images = []
+    generated_image_sets = []
+    resolutions = [512, 1024]
+    num_images_list = [9, 1]
+    inference_steps_list = [4, 10]
+    iteration = 0
+
+    while iteration < len(resolutions):
+        resolution = resolutions[iteration]
+        num_images = num_images_list[iteration]
+        inference_steps = inference_steps_list[iteration]
         
-        while True:
+        # Pass all selected images from the previous iteration
+        base_images = selected_images if selected_images and iteration > 0 else None
+
+        # Use the specific temperature for the current iteration or the default if not set
+        current_temperature = temperatures[iteration] if iteration < len(temperatures) else temperature
+        print(f"Current prompt: {prompt}")
+        print(f"Current temperature for this iteration: {current_temperature}")
+        print(f"Current resolution: {resolution}")
+        print(f"Inference steps: {inference_steps}")
+
+        # Generate images
+        generated_images = generate_images(prompt, num_images=num_images, resolution=resolution, 
+                                           temp=current_temperature, base_images=base_images, 
+                                           steps=inference_steps)
+        generated_image_sets.append(generated_images)
+
+        selected_image = display_and_select_image(generated_images, resolution, iteration)
+
+        user_input = handle_user_input()
+
+        if user_input == "regenerate":
+            generated_images = generate_images(prompt, num_images=num_images, resolution=resolution, 
+                                               temp=current_temperature, base_images=base_images, 
+                                               steps=inference_steps)
+            generated_image_sets[iteration] = generated_images
+            selected_image = display_and_select_image(generated_images, resolution, iteration)
+            continue
+        elif user_input == "restart":
+            selected_images = []
+            generated_image_sets = []
+            temperatures = []
+            iteration = 0
+            continue
+        elif user_input == "reselect":
+            iteration = max(0, iteration - 1)
+            continue
+        elif user_input == "stop":
+            print("User requested to stop. Exiting.")
+            return
+        elif user_input == "prompt":
+            prompt = input("Enter new prompt: ")
+            continue
+        elif user_input == "temperature":
             try:
-                temperature = float(input("Enter the temperature for image generation (suggested range from 0.5 to 1.5): ").strip())
-                if 0.5 <= temperature <= 1.5:
-                    break
+                new_temp = float(input("Enter new temperature (suggested range from 0.5 to 1.5): "))
+                temperature = new_temp
+                if iteration == len(temperatures):
+                    temperatures.append(temperature)
                 else:
-                    print("Please enter a temperature within the suggested range from 0.5 to 1.5.")
+                    temperatures[iteration] = temperature
+                current_temperature = temperature
             except ValueError:
-                print("Invalid input. Please enter a valid number for temperature.")
+                print("Invalid temperature input. Using previous temperature.")
+            continue
+        elif user_input == "continue":
+            pass  # Exit the loop to move to the next iteration
 
-        selected_images = []
-        resolutions = [512, 1024]
-        num_images_list = [9, 1]
-        inference_steps = [4, 10]
-        iteration = 0
+        if selected_image is None:
+            print("No image selected, exiting.")
+            return
 
-        while iteration < len(resolutions):
-            resolution = resolutions[iteration]
-            num_images = num_images_list[iteration]
-            steps = inference_steps[iteration]
-            base_images = selected_images if selected_images and iteration > 0 else None
+        # Manage the selection and temperatures for each iteration
+        if isinstance(selected_image, list):
+            selected_images.extend(selected_image)
+        else:
+            selected_images.append(selected_image)
 
-            print(f"Generating images for prompt: {prompt}")
-            print(f"Temperature for this iteration: {temperature}")
+        if iteration >= len(temperatures):
+            temperatures.append(current_temperature)  # Ensure each iteration's temperature is recorded
 
-            generated_images = generate_images(prompt, num_images=num_images, resolution=resolution, temp=temperature, base_images=base_images, steps=steps)
+        iteration += 1  # Move to the next iteration only when ready or 'continue' is selected
 
-            selected_images = display_and_select_image(generated_images, resolution, iteration)
-
-            if selected_images is None:
-                print("No images selected. Restarting with a new prompt and temperature.")
-                break
-
-            if iteration == 1:  # After selecting 512 resolution images
-                # Process the selected images with the VAR and VAE models
-                selected_image_paths = [os.path.join("generated_images", f"{resolution}-selected-{i+1}.png") for i in range(len(selected_images))]
-                device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-                # Extract concepts using VQVAE
-                concepts = process_images(selected_image_paths, vae, var, device)
-
-                # Save concept images
-                concept_folder = "concept_images"
-                if not os.path.exists(concept_folder):
-                    os.makedirs(concept_folder)
-                    
-                for i, concept in enumerate(concepts):
-                    concept_image_path = os.path.join(concept_folder, f"concept_{i+1}.png")
-                    concept_image = transforms.ToPILImage()(concept.cpu().squeeze(0))
-                    concept_image.save(concept_image_path)
-                    print(f"Concept image {i+1} saved as {concept_image_path}")
-
-                # Generate final image using the extracted concepts
-                final_image = generate_final_image(concepts, prompt, temperature)
-                
-                # Save the final image
-                final_image_path = os.path.join("generated_images", "final_image.png")
-                final_image.save(final_image_path)
-                print(f"Final image generated and saved as {final_image_path}")
-
-                return final_image
-
-            iteration += 1
-
-        if iteration == len(resolutions):
-            print("Image generation completed successfully.")
-
+    return selected_images
