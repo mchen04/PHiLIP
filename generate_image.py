@@ -3,6 +3,11 @@ import torch
 from diffusers import PixArtAlphaPipeline
 from torchvision import transforms
 from PIL import Image
+import logging
+from typing import List, Optional, Union
+from config import MODEL_MID_RES, MODEL_HIGH_RES
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Preprocessing pipeline for images
 preprocess = transforms.Compose([
@@ -12,54 +17,61 @@ preprocess = transforms.Compose([
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
-# Load pre-trained pipelines with debugging
-def load_pipeline_with_debugging(model_name):
-    model = PixArtAlphaPipeline.from_pretrained(model_name)
-    return model
+# Load pre-trained pipelines
+pipe_mid_res = PixArtAlphaPipeline.from_pretrained(MODEL_MID_RES)
+pipe_high_res = PixArtAlphaPipeline.from_pretrained(MODEL_HIGH_RES)
 
-pipe_mid_res = load_pipeline_with_debugging("PixArt-alpha/PixArt-XL-2-512x512")
-pipe_high_res = load_pipeline_with_debugging("PixArt-alpha/PixArt-XL-2-1024-MS")
+def generate_images(prompt: str, num_images: int = 1, resolution: int = 512, temp: float = 0.7, 
+                    base_images: Optional[Union[List[np.ndarray], np.ndarray]] = None, steps: int = 50) -> List[np.ndarray]:
+    """
+    Generate images based on the given prompt and parameters.
+    
+    Args:
+        prompt (str): The text prompt for image generation.
+        num_images (int): Number of images to generate.
+        resolution (int): Image resolution (512 or 1024).
+        temp (float): Temperature for generation guidance.
+        base_images (Optional[Union[List[np.ndarray], np.ndarray]]): Base images for generation.
+        steps (int): Number of inference steps.
+    
+    Returns:
+        List[np.ndarray]: List of generated images as numpy arrays.
+    """
+    pipe = pipe_mid_res if resolution == 512 else pipe_high_res
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    pipe.to(device)
 
-def generate_images(prompt, num_images=1, resolution=512, temp=0.7, base_images=None, steps=50):
-    if resolution == 512:
-        pipe = pipe_mid_res
-    elif resolution == 1024:
-        pipe = pipe_high_res
+    input_images = process_base_images(base_images, device) if base_images else None
+
+    try:
+        with torch.no_grad():
+            results = pipe(
+                [prompt] * num_images,
+                num_images_per_prompt=1,
+                height=resolution,
+                width=resolution,
+                guidance_scale=temp,
+                image=input_images,
+                num_inference_steps=steps
+            )
+        return [np.array(image) for image in results.images]
+    except Exception as e:
+        logging.error(f"Error during image generation: {str(e)}")
+        return []
+
+def process_base_images(base_images: Union[List[np.ndarray], np.ndarray], device: str) -> torch.Tensor:
+    """
+    Process base images for use in generation.
+    
+    Args:
+        base_images (Union[List[np.ndarray], np.ndarray]): Base images to process.
+        device (str): Device to use for processing.
+    
+    Returns:
+        torch.Tensor: Processed base images as a tensor.
+    """
+    if isinstance(base_images, list):
+        base_image_tensors = [preprocess(Image.fromarray(img) if isinstance(img, np.ndarray) else img).unsqueeze(0) for img in base_images]
+        return torch.mean(torch.stack(base_image_tensors), dim=0).to(device)
     else:
-        raise ValueError(f"Unsupported resolution: {resolution}")
-
-    if base_images is not None:
-        if isinstance(base_images, list):
-            # Process and average multiple base images
-            base_image_tensors = []
-            for img in base_images:
-                if isinstance(img, np.ndarray):
-                    img = Image.fromarray(img)
-                img_tensor = preprocess(img).unsqueeze(0)
-                base_image_tensors.append(img_tensor)
-            
-            # Stack and average the tensors
-            stacked_tensors = torch.stack(base_image_tensors)
-            averaged_tensor = torch.mean(stacked_tensors, dim=0)
-            
-            input_images = averaged_tensor.to("hip" if torch.cuda.is_available() else "cpu")
-        else:
-            # Single base image
-            if isinstance(base_images, np.ndarray):
-                base_images = Image.fromarray(base_images)
-            input_images = preprocess(base_images).unsqueeze(0).to("hip" if torch.cuda.is_available() else "cpu")
-    else:
-        input_images = None
-
-    if torch.cuda.is_available():
-        pipe.to("hip")
-    else:
-        pipe.to("cpu")
-
-    prompts = [prompt] * num_images
-
-    with torch.no_grad():
-        results = pipe(prompts, num_images=num_images, resolution=resolution, guidance_scale=temp, image=input_images, return_tensors=False, num_inference_steps=steps)
-        images = [np.array(image) for image in results.images]
-
-    return images
+        return preprocess(Image.fromarray(base_images) if isinstance(base_images, np.ndarray) else base_images).unsqueeze(0).to(device)
