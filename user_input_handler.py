@@ -1,7 +1,9 @@
+# user_input_handler.py
+
 import logging
 from config import VALID_USER_INPUTS
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 def handle_user_input() -> str:
     """
@@ -17,4 +19,4 @@ def handle_user_input() -> str:
         if user_input in VALID_USER_INPUTS:
             return user_input
         else:
-            logging.warning(f"Invalid option: {user_input}. Please enter a valid command.")
+            logger.warning(f"Invalid option: {user_input}. Please enter a valid command.")
