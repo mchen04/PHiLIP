@@ -1,12 +1,15 @@
+import logging
 from image_generation_loop import image_generation_loop
+from config import INITIAL_PROMPT
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def main():
-    initial_prompt = "A magical landscape with a towering, crystalline mountain and a serene lake reflecting iridescent clouds. At the lake's edge, a glowing blue-leaved tree stands amidst bioluminescent plants. A bridge of light arches over the lake towards an enchanted castle nestled in the mountain peaks."
-    final_images = image_generation_loop(initial_prompt)
+    final_images = image_generation_loop(INITIAL_PROMPT)
     if final_images:
-        print("Image generation completed successfully.")
+        logging.info("Image generation completed successfully.")
     else:
-        print("Program exiting.")
+        logging.info("Program exiting.")
 
 if __name__ == "__main__":
     main()
