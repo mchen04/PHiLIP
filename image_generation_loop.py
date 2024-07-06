@@ -1,14 +1,22 @@
+# image_generation_loop.py
+
 import os
 import shutil
 import logging
-import numpy as np
 from typing import List, Optional
+import numpy as np
+from textwrap import dedent
 from generate_image import generate_images
 from display_image import display_and_select_image
 from user_input_handler import handle_user_input
-from config import IMAGE_FOLDER, RESOLUTIONS, NUM_IMAGES_LIST, INFERENCE_STEPS_LIST, DEFAULT_TEMPERATURE
+from config import (
+    IMAGE_FOLDER, RESOLUTIONS, NUM_IMAGES_LIST, 
+    INFERENCE_STEPS_LIST, DEFAULT_TEMPERATURE,
+    LOG_FORMAT, LOG_DATE_FORMAT
+)
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
+logger = logging.getLogger(__name__)
 
 def clear_generated_images_folder() -> None:
     """Clears all files in the generated_images folder."""
@@ -21,7 +29,7 @@ def image_generation_loop(initial_prompt: str) -> Optional[List[np.ndarray]]:
     Main loop for image generation process.
     
     Args:
-        initial_prompt (str): Initial prompt for image generation.
+        initial_prompt: Initial prompt for image generation.
     
     Returns:
         Optional[List[np.ndarray]]: List of final selected images or None if process is stopped.
@@ -33,9 +41,8 @@ def image_generation_loop(initial_prompt: str) -> Optional[List[np.ndarray]]:
     temperatures: List[float] = []
     selected_images: List[np.ndarray] = []
     generated_image_sets: List[List[np.ndarray]] = []
-    iteration = 0
-
-    while iteration < len(RESOLUTIONS):
+    
+    for iteration in range(len(RESOLUTIONS)):
         resolution = RESOLUTIONS[iteration]
         num_images = NUM_IMAGES_LIST[iteration]
         inference_steps = INFERENCE_STEPS_LIST[iteration]
@@ -43,7 +50,13 @@ def image_generation_loop(initial_prompt: str) -> Optional[List[np.ndarray]]:
         base_images = selected_images if selected_images and iteration > 0 else None
         current_temperature = temperatures[iteration] if iteration < len(temperatures) else temperature
 
-        print_current_settings(prompt, current_temperature, resolution, inference_steps)
+        logger.info(dedent(f"""
+        Current settings:
+        Prompt: {prompt}
+        Temperature: {current_temperature}
+        Resolution: {resolution}
+        Inference steps: {inference_steps}
+        """))
 
         generated_images = generate_images(prompt, num_images, resolution, current_temperature, base_images, inference_steps)
         generated_image_sets.append(generated_images)
@@ -55,13 +68,12 @@ def image_generation_loop(initial_prompt: str) -> Optional[List[np.ndarray]]:
         if user_input == "regenerate":
             continue
         elif user_input == "restart":
-            selected_images, generated_image_sets, temperatures, iteration = [], [], [], 0
-            continue
+            return []
         elif user_input == "reselect":
             iteration = max(0, iteration - 1)
             continue
         elif user_input == "stop":
-            logging.info("User requested to stop. Exiting.")
+            logger.info("User requested to stop. Exiting.")
             return None
         elif user_input == "prompt":
             prompt = input("Enter new prompt: ")
@@ -77,7 +89,7 @@ def image_generation_loop(initial_prompt: str) -> Optional[List[np.ndarray]]:
             pass
 
         if selected_image is None:
-            logging.warning("No image selected, exiting.")
+            logger.warning("No image selected, exiting.")
             return None
 
         selected_images.extend(selected_image if isinstance(selected_image, list) else [selected_image])
@@ -85,24 +97,7 @@ def image_generation_loop(initial_prompt: str) -> Optional[List[np.ndarray]]:
         if iteration >= len(temperatures):
             temperatures.append(current_temperature)
 
-        iteration += 1
-
     return selected_images
-
-def print_current_settings(prompt: str, temperature: float, resolution: int, inference_steps: int) -> None:
-    """
-    Print current settings for image generation.
-    
-    Args:
-        prompt (str): Current prompt.
-        temperature (float): Current temperature.
-        resolution (int): Current resolution.
-        inference_steps (int): Current number of inference steps.
-    """
-    logging.info(f"Current prompt: {prompt}")
-    logging.info(f"Current temperature: {temperature}")
-    logging.info(f"Current resolution: {resolution}")
-    logging.info(f"Inference steps: {inference_steps}")
 
 def get_new_temperature() -> float:
     """
@@ -116,4 +111,9 @@ def get_new_temperature() -> float:
             new_temp = float(input("Enter new temperature (suggested range from 0.5 to 1.5): "))
             return new_temp
         except ValueError:
-            logging.warning("Invalid temperature input. Please enter a valid number.")
+            logger.warning("Invalid temperature input. Please enter a valid number.")
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
+    result = image_generation_loop("Test prompt")
+    print(f"Final result: {result}")
