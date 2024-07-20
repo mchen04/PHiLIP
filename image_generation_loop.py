@@ -6,14 +6,14 @@ import logging
 from typing import List, Optional
 import numpy as np
 from textwrap import dedent
-from generate_image import generate_images
+from generate_image import generate_images, upscale_image
 from display_image import display_and_select_image
 from user_input_handler import handle_user_input
 from config import (
-    IMAGE_FOLDER, RESOLUTIONS, NUM_IMAGES_LIST, 
-    INFERENCE_STEPS_LIST, DEFAULT_TEMPERATURE,
+    IMAGE_FOLDER, DEFAULT_TEMPERATURE,
     LOG_FORMAT, LOG_DATE_FORMAT
 )
+from PIL import Image
 
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ def clear_generated_images_folder() -> None:
         shutil.rmtree(IMAGE_FOLDER)
     os.makedirs(IMAGE_FOLDER)
 
-def image_generation_loop(initial_prompt: str) -> Optional[List[np.ndarray]]:
+def image_generation_loop(initial_prompt: str) -> Optional[np.ndarray]:
     """
     Main loop for image generation process.
     
@@ -32,45 +32,40 @@ def image_generation_loop(initial_prompt: str) -> Optional[List[np.ndarray]]:
         initial_prompt: Initial prompt for image generation.
     
     Returns:
-        Optional[List[np.ndarray]]: List of final selected images or None if process is stopped.
+        Optional[np.ndarray]: Final upscaled image as a numpy array or None if process is stopped.
     """
     clear_generated_images_folder()
 
     prompt = initial_prompt
     temperature = DEFAULT_TEMPERATURE
-    temperatures: List[float] = []
-    selected_images: List[np.ndarray] = []
-    generated_image_sets: List[List[np.ndarray]] = []
+    resolution = 512
+    num_images = 9
+    inference_steps = 6
     
-    for iteration in range(len(RESOLUTIONS)):
-        resolution = RESOLUTIONS[iteration]
-        num_images = NUM_IMAGES_LIST[iteration]
-        inference_steps = INFERENCE_STEPS_LIST[iteration]
-        
-        base_images = selected_images if selected_images and iteration > 0 else None
-        current_temperature = temperatures[iteration] if iteration < len(temperatures) else temperature
-
+    while True:
         logger.info(dedent(f"""
         Current settings:
         Prompt: {prompt}
-        Temperature: {current_temperature}
+        Temperature: {temperature}
         Resolution: {resolution}
         Inference steps: {inference_steps}
         """))
 
-        generated_images = generate_images(prompt, num_images, resolution, current_temperature, base_images, inference_steps)
-        generated_image_sets.append(generated_images)
+        generated_images = generate_images(prompt, num_images, resolution, temperature, None, inference_steps)
 
-        selected_image = display_and_select_image(generated_images, resolution, iteration)
+        selected_image = display_and_select_image(generated_images, resolution, 0)
+
+        if selected_image is None:
+            logger.warning("No image selected, exiting.")
+            return None
 
         user_input = handle_user_input()
 
         if user_input == "regenerate":
             continue
         elif user_input == "restart":
-            return []
+            return None
         elif user_input == "reselect":
-            iteration = max(0, iteration - 1)
             continue
         elif user_input == "stop":
             logger.info("User requested to stop. Exiting.")
@@ -80,24 +75,13 @@ def image_generation_loop(initial_prompt: str) -> Optional[List[np.ndarray]]:
             continue
         elif user_input == "temperature":
             temperature = get_new_temperature()
-            if iteration == len(temperatures):
-                temperatures.append(temperature)
-            else:
-                temperatures[iteration] = temperature
             continue
         elif user_input == "continue":
-            pass
+            break
 
-        if selected_image is None:
-            logger.warning("No image selected, exiting.")
-            return None
-
-        selected_images.extend(selected_image if isinstance(selected_image, list) else [selected_image])
-
-        if iteration >= len(temperatures):
-            temperatures.append(current_temperature)
-
-    return selected_images
+    logger.info("Upscaling the selected image to 1024x1024...")
+    upscaled_image = upscale_image(selected_image, prompt, output_size=(1024, 1024))
+    return upscaled_image
 
 def get_new_temperature() -> float:
     """
