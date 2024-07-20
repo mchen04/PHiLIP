@@ -7,7 +7,7 @@ import logging
 # Image generation settings
 RESOLUTIONS: Final[List[int]] = [512, 1024]
 NUM_IMAGES_LIST: Final[List[int]] = [9, 1]
-INFERENCE_STEPS_LIST: Final[List[int]] = [4, 10]
+INFERENCE_STEPS_LIST: Final[List[int]] = [6, 10]
 DEFAULT_TEMPERATURE: Final[float] = 1.0
 
 # File paths
