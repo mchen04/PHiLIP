@@ -5,13 +5,12 @@ import numpy as np
 import os
 import logging
 from typing import List, Optional
-from PIL import Image
 from config import IMAGE_FOLDER, LOG_FORMAT, LOG_DATE_FORMAT
 
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
 logger = logging.getLogger(__name__)
 
-def display_and_select_image(images: List[np.ndarray], resolution: int, iteration: int) -> Optional[Image.Image]:
+def display_and_select_image(images: List[np.ndarray], resolution: int, iteration: int) -> Optional[List[np.ndarray]]:
     """
     Displays images, prompts the user to select their favorite, and saves all images.
     
@@ -21,7 +20,7 @@ def display_and_select_image(images: List[np.ndarray], resolution: int, iteratio
         iteration: Current iteration number.
     
     Returns:
-        Optional[Image.Image]: Selected image as a PIL Image or None if no selection is made.
+        Optional[List[np.ndarray]]: List of selected images or None if no selection is made.
     """
     num_images = len(images)
     fig, axs = plt.subplots(1, num_images, figsize=(5 * num_images, 5))
@@ -39,24 +38,37 @@ def display_and_select_image(images: List[np.ndarray], resolution: int, iteratio
 
     return get_user_selection(images, num_images, resolution)
 
-def save_images(images: List[np.ndarray], resolution: int) -> None:
+def save_images(images: List[np.ndarray], resolution: int, final: bool = False) -> None:
     """
     Save all generated images.
     
     Args:
         images: List of images to save.
         resolution: Resolution of the images.
+        final: Whether this is the final enhanced image.
     """
-    logger.info(f"Saving {len(images)} images at {resolution}x{resolution} resolution")
+    num_images = len(images)
+    logger.info(f"Saving {num_images} image{'s' if num_images > 1 else ''} at {resolution}x{resolution} resolution")
+    
     for i, img in enumerate(images):
-        file_path = os.path.join(IMAGE_FOLDER, f"{resolution}-{i+1}.png")
+        if final:
+            file_name = f"final-enhanced-{resolution}.png"
+        else:
+            file_name = f"{resolution}-{i+1}.png"
+        file_path = os.path.join(IMAGE_FOLDER, file_name)
         try:
             plt.imsave(file_path, img)
+            logger.info(f"Image {file_name} saved successfully")
         except Exception as e:
-            logger.error(f"Failed to save image {i+1}: {str(e)}")
-    logger.info(f"All images saved successfully in {IMAGE_FOLDER}")
+            logger.error(f"Failed to save image {file_name}: {str(e)}")
+    
+    if final:
+        logger.info(f"Final enhanced image saved as {file_name}")
+    else:
+        logger.info(f"All {num_images} images saved in {IMAGE_FOLDER}")
 
-def get_user_selection(images: List[np.ndarray], num_images: int, resolution: int) -> Optional[Image.Image]:
+
+def get_user_selection(images: List[np.ndarray], num_images: int, resolution: int) -> Optional[List[np.ndarray]]:
     """
     Get user's image selection.
     
@@ -66,37 +78,40 @@ def get_user_selection(images: List[np.ndarray], num_images: int, resolution: in
         resolution: Resolution of the images.
     
     Returns:
-        Optional[Image.Image]: Selected image as a PIL Image or None if no selection is made.
+        Optional[List[np.ndarray]]: List of selected images or None if no selection is made.
     """
     while True:
-        choice = input(f"Select your favorite image (1-{num_images}), or type 'stop' to exit: ").strip()
+        choice = input(f"Select your favorite images (1-{num_images}), separated by commas, or type 'stop' to exit: ").strip()
 
         if choice.lower() == 'stop':
             return None
 
         try:
-            index = int(choice) - 1
-            if 0 <= index < num_images:
-                selected_image = Image.fromarray(images[index])
-                rename_selected_image(index, resolution)
-                return selected_image
-            else:
-                raise ValueError()
-        except ValueError:
-            logger.warning(f"Invalid input. Please enter a number between 1 and {num_images} or 'stop' to exit.")
+            selected_indices = [int(x) - 1 for x in choice.split(',')]
+            selected_images = [images[i] for i in selected_indices if 0 <= i < num_images]
+            
+            if not selected_images:
+                raise ValueError("No valid images selected")
+            
+            rename_selected_images(selected_indices, resolution)
+            return selected_images
+        except ValueError as e:
+            logger.warning(f"Invalid input: {e}")
+            print(f"Invalid input: {e}. Please enter numbers between 1 and {num_images} separated by commas or 'stop' to exit.")
 
-def rename_selected_image(index: int, resolution: int) -> None:
+def rename_selected_images(selected_indices: List[int], resolution: int) -> None:
     """
-    Rename selected image.
+    Rename selected images.
     
     Args:
-        index: Index of selected image.
-        resolution: Resolution of the image.
+        selected_indices: Indices of selected images.
+        resolution: Resolution of the images.
     """
-    old_path = os.path.join(IMAGE_FOLDER, f"{resolution}-{index+1}.png")
-    new_path = os.path.join(IMAGE_FOLDER, f"{resolution}-selected.png")
-    try:
-        os.rename(old_path, new_path)
-        logger.info(f"Image {index+1} renamed to '{os.path.basename(new_path)}'")
-    except Exception as e:
-        logger.error(f"Failed to rename image {index+1}: {str(e)}")
+    for i in selected_indices:
+        old_path = os.path.join(IMAGE_FOLDER, f"{resolution}-{i+1}.png")
+        new_path = os.path.join(IMAGE_FOLDER, f"{resolution}-selected-{i+1}.png")
+        try:
+            os.rename(old_path, new_path)
+            logger.info(f"Image {i+1} renamed to '{os.path.basename(new_path)}'")
+        except Exception as e:
+            logger.error(f"Failed to rename image {i+1}: {str(e)}")
