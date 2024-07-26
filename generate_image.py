@@ -1,83 +1,134 @@
-# generate_image.py
+# image_enhancement.py
 
-import numpy as np
-import torch
-from diffusers import PixArtAlphaPipeline
-from torchvision import transforms
-from PIL import Image
 import logging
-from typing import List, Optional, Union
-from tqdm import tqdm
-from config import MODEL_MID_RES, MODEL_HIGH_RES, LOG_FORMAT, LOG_DATE_FORMAT
+from typing import Tuple
+import numpy as np
+from PIL import Image
+import torch
+import cv2
+from diffusers import StableDiffusionLatentUpscalePipeline, StableDiffusionPipeline, ControlNetModel
+from torchvision import transforms
+from config import (
+    LOG_FORMAT, LOG_DATE_FORMAT, UPSCALER_MODEL, SD_BASE_MODEL,
+    CONTROLNET_MODEL, CONTROLNET_CONDITIONING_SCALE,
+    CONTROL_GUIDANCE_START, CONTROL_GUIDANCE_END
+)
 
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
 logger = logging.getLogger(__name__)
 
-# Preprocessing pipeline for images
-preprocess = transforms.Compose([
-    transforms.Resize(256),
-    transforms.CenterCrop(224),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-])
+device = "cuda" if torch.cuda.is_available() else "cpu"
+dtype = torch.float16 if device == "cuda" else torch.float32
 
-# Load pre-trained pipelines
-pipe_mid_res = PixArtAlphaPipeline.from_pretrained(MODEL_MID_RES)
-pipe_high_res = PixArtAlphaPipeline.from_pretrained(MODEL_HIGH_RES)
-
-def generate_images(prompt: str, num_images: int = 1, resolution: int = 512, temp: float = 0.7, 
-                    base_images: Optional[Union[List[np.ndarray], np.ndarray]] = None, steps: int = 50) -> List[np.ndarray]:
+def latent_upscale_image(image: Image.Image, prompt: str, output_size: Tuple[int, int] = (1024, 1024)) -> np.ndarray:
     """
-    Generate images based on the given prompt and parameters.
+    Upscale the given image using Stable Diffusion x2 latent upscaler.
     
     Args:
-        prompt: The text prompt for image generation.
-        num_images: Number of images to generate.
-        resolution: Image resolution (512 or 1024).
-        temp: Temperature for generation guidance.
-        base_images: Base images for generation.
-        steps: Number of inference steps.
+        image: PIL Image to upscale.
+        prompt: Text prompt for guided upscaling.
+        output_size: Desired output size as a tuple (width, height).
     
     Returns:
-        List[np.ndarray]: List of generated images as numpy arrays.
+        np.ndarray: Upscaled image as a numpy array.
     """
-    pipe = pipe_mid_res if resolution == 512 else pipe_high_res
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    pipe.to(device)
-
-    input_images = process_base_images(base_images, device) if base_images else None
-
     try:
+        sd_pipeline = StableDiffusionPipeline.from_pretrained(SD_BASE_MODEL, torch_dtype=dtype)
+        upscaler = StableDiffusionLatentUpscalePipeline.from_pretrained(UPSCALER_MODEL, torch_dtype=dtype)
+        sd_pipeline.to(device)
+        upscaler.to(device)
+        
+        # Encode the image to latent space
         with torch.no_grad():
-            results = pipe(
-                [prompt] * num_images,
-                num_images_per_prompt=1,
-                height=resolution,
-                width=resolution,
-                guidance_scale=temp,
-                image=input_images,
-                num_inference_steps=steps,
-                callback=lambda i, t, x: tqdm.write(f"Step {i}/{steps}", end="\r")
-            )
-        logger.info(f"Generated {num_images} images successfully")
-        return [np.array(image) for image in results.images]
-    except Exception as e:
-        logger.error(f"Error during image generation: {str(e)}")
-        return []
+            latent = sd_pipeline.vae.encode(transforms.ToTensor()(image).unsqueeze(0).to(device) * 2 - 1)
+            latent = latent.latent_dist.sample() * sd_pipeline.vae.config.scaling_factor
 
-def process_base_images(base_images: Union[List[np.ndarray], np.ndarray], device: str) -> torch.Tensor:
+        # Upscale the latent
+        with torch.no_grad():
+            upscaled_latent = upscaler(
+                prompt=prompt,
+                image=latent,
+                num_inference_steps=20,
+                guidance_scale=0,
+            ).images[0]
+
+        # Decode the upscaled latent
+        with torch.no_grad():
+            image = sd_pipeline.vae.decode(upscaled_latent / sd_pipeline.vae.config.scaling_factor, return_dict=False)[0]
+        image = sd_pipeline.image_processor.postprocess(image, output_type="pil")[0]
+        image = image.resize(output_size, Image.LANCZOS)
+        
+        logger.info(f"Image upscaled successfully to {output_size[0]}x{output_size[1]}")
+        return np.array(image)
+    except Exception as e:
+        logger.error(f"Error during latent image upscaling: {str(e)}")
+        logger.info("Falling back to simple resize")
+        return np.array(image.resize(output_size, Image.LANCZOS))
+
+def apply_freestyle(image: np.ndarray, prompt: str) -> np.ndarray:
     """
-    Process base images for use in generation.
+    Apply Freestyle to the given image.
     
     Args:
-        base_images: Base images to process.
-        device: Device to use for processing.
+        image: Input image as a numpy array.
+        prompt: Text prompt for Freestyle.
     
     Returns:
-        torch.Tensor: Processed base images as a tensor.
+        np.ndarray: Processed image as a numpy array.
     """
-    if isinstance(base_images, list):
-        base_image_tensors = [preprocess(Image.fromarray(img)).unsqueeze(0) for img in base_images]
-        return torch.mean(torch.stack(base_image_tensors), dim=0).to(device)
-    else:
-        return preprocess(Image.fromarray(base_images)).unsqueeze(0).to(device)
+    # TODO: Implement Freestyle functionality
+    logger.info("Freestyle functionality not yet implemented")
+    return image
+
+def apply_controlnet(image: np.ndarray, prompt: str) -> np.ndarray:
+    """
+    Apply ControlNet to the given image.
+    
+    Args:
+        image: Input image as a numpy array.
+        prompt: Text prompt for ControlNet.
+    
+    Returns:
+        np.ndarray: Processed image as a numpy array.
+    """
+    try:
+        # Load ControlNet model
+        controlnet = ControlNetModel.from_pretrained(CONTROLNET_MODEL, torch_dtype=dtype)
+        
+        # Load Stable Diffusion pipeline
+        pipe = StableDiffusionPipeline.from_pretrained(SD_BASE_MODEL, controlnet=controlnet, torch_dtype=dtype)
+        pipe.to(device)
+        
+        # Prepare control image (Canny edge detection)
+        control_image = get_canny_image(image)
+        
+        # Generate image
+        output = pipe(
+            prompt,
+            image=control_image,
+            num_inference_steps=20,
+            controlnet_conditioning_scale=CONTROLNET_CONDITIONING_SCALE,
+            control_guidance_start=CONTROL_GUIDANCE_START,
+            control_guidance_end=CONTROL_GUIDANCE_END
+        ).images[0]
+        
+        logger.info("ControlNet processing completed successfully")
+        return np.array(output)
+    except Exception as e:
+        logger.error(f"Error during ControlNet processing: {str(e)}")
+        return image
+
+def get_canny_image(image: np.ndarray) -> Image.Image:
+    """
+    Apply Canny edge detection to the input image.
+    
+    Args:
+        image: Input image as a numpy array.
+    
+    Returns:
+        PIL.Image.Image: Canny edge detected image.
+    """
+    image = cv2.Canny(image, 100, 200)
+    image = image[:, :, None]
+    image = np.concatenate([image, image, image], axis=2)
+    return Image.fromarray(image)
