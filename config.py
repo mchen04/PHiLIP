@@ -29,7 +29,7 @@ CONTROL_GUIDANCE_END: Final[float] = 1.0
 # User input options
 VALID_USER_COMMANDS: Final[set] = {
     "regenerate", "reselect", "stop", "continue", 
-    "prompt", "temperature", "restart"
+    "prompt", "temperature", "restart", "change_num_images"
 }
 
 # Enhancement options
@@ -37,7 +37,7 @@ ENHANCEMENT_OPTIONS: Final[List[str]] = ["Freestyle", "Upscaler", "ControlNet", 
 
 # Initial prompt
 INITIAL_PROMPT: Final[str] = """
-Prompt
+Create a serene mountain landscape at sunrise with pink and orange skies. Snow-capped peaks reflect the morning light, while a misty, green valley below features a winding crystal-clear river and tall pine trees. Wildflowers add vibrant colors to the tranquil scene.
 """
 
 # Logging configuration
