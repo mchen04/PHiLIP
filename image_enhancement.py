@@ -6,7 +6,7 @@ import numpy as np
 from PIL import Image
 import torch
 import cv2
-from diffusers import StableDiffusionLatentUpscalePipeline, StableDiffusionPipeline, ControlNetModel
+from diffusers import StableDiffusionLatentUpscalePipeline, StableDiffusionControlNetPipeline, ControlNetModel
 from torchvision import transforms
 from config import (
     LOG_FORMAT, LOG_DATE_FORMAT, UPSCALER_MODEL, SD_BASE_MODEL,
@@ -33,33 +33,22 @@ def latent_upscale_image(image: Image.Image, prompt: str, output_size: Tuple[int
         np.ndarray: Upscaled image as a numpy array.
     """
     try:
-        sd_pipeline = StableDiffusionPipeline.from_pretrained(SD_BASE_MODEL, torch_dtype=dtype)
-        upscaler = StableDiffusionLatentUpscalePipeline.from_pretrained(UPSCALER_MODEL, torch_dtype=dtype)
+        sd_pipeline = StableDiffusionLatentUpscalePipeline.from_pretrained(UPSCALER_MODEL, torch_dtype=dtype)
         sd_pipeline.to(device)
-        upscaler.to(device)
         
-        # Encode the image to latent space
+        # Upscale the image
         with torch.no_grad():
-            latent = sd_pipeline.vae.encode(transforms.ToTensor()(image).unsqueeze(0).to(device) * 2 - 1)
-            latent = latent.latent_dist.sample() * sd_pipeline.vae.config.scaling_factor
-
-        # Upscale the latent
-        with torch.no_grad():
-            upscaled_latent = upscaler(
+            upscaled_image = sd_pipeline(
                 prompt=prompt,
-                image=latent,
+                image=image.resize((512, 512)),  # Resize to 512x512 as required by the upscaler
                 num_inference_steps=20,
                 guidance_scale=0,
             ).images[0]
-
-        # Decode the upscaled latent
-        with torch.no_grad():
-            image = sd_pipeline.vae.decode(upscaled_latent / sd_pipeline.vae.config.scaling_factor, return_dict=False)[0]
-        image = sd_pipeline.image_processor.postprocess(image, output_type="pil")[0]
-        image = image.resize(output_size, Image.LANCZOS)
+        
+        upscaled_image = upscaled_image.resize(output_size, Image.LANCZOS)
         
         logger.info(f"Image upscaled successfully to {output_size[0]}x{output_size[1]}")
-        return np.array(image)
+        return np.array(upscaled_image)
     except Exception as e:
         logger.error(f"Error during latent image upscaling: {str(e)}")
         logger.info("Falling back to simple resize")
@@ -82,41 +71,50 @@ def apply_freestyle(image: np.ndarray, prompt: str) -> np.ndarray:
 
 def apply_controlnet(image: np.ndarray, prompt: str) -> np.ndarray:
     """
-    Apply ControlNet to the given image.
+    Apply ControlNet to the given image and output at 1024x1024 resolution.
     
     Args:
         image: Input image as a numpy array.
         prompt: Text prompt for ControlNet.
     
     Returns:
-        np.ndarray: Processed image as a numpy array.
+        np.ndarray: Processed image as a numpy array at 1024x1024 resolution.
     """
     try:
         # Load ControlNet model
         controlnet = ControlNetModel.from_pretrained(CONTROLNET_MODEL, torch_dtype=dtype)
         
         # Load Stable Diffusion pipeline
-        pipe = StableDiffusionPipeline.from_pretrained(SD_BASE_MODEL, controlnet=controlnet, torch_dtype=dtype)
+        pipe = StableDiffusionControlNetPipeline.from_pretrained(
+            SD_BASE_MODEL,
+            controlnet=controlnet,
+            torch_dtype=dtype
+        )
         pipe.to(device)
         
         # Prepare control image (Canny edge detection)
         control_image = get_canny_image(image)
         
+        # Resize control image to 1024x1024
+        control_image = control_image.resize((1024, 1024), Image.LANCZOS)
+        
         # Generate image
         output = pipe(
             prompt,
             image=control_image,
-            num_inference_steps=20,
+            num_inference_steps=10,  # Increased for better quality
             controlnet_conditioning_scale=CONTROLNET_CONDITIONING_SCALE,
             control_guidance_start=CONTROL_GUIDANCE_START,
-            control_guidance_end=CONTROL_GUIDANCE_END
+            control_guidance_end=CONTROL_GUIDANCE_END,
+            height=1024,
+            width=1024
         ).images[0]
         
-        logger.info("ControlNet processing completed successfully")
+        logger.info("ControlNet processing completed successfully at 1024x1024 resolution")
         return np.array(output)
     except Exception as e:
         logger.error(f"Error during ControlNet processing: {str(e)}")
-        return image
+        return cv2.resize(image, (1024, 1024))  # Fallback to simple resize
 
 def get_canny_image(image: np.ndarray) -> Image.Image:
     """
