@@ -5,9 +5,14 @@ from typing import Tuple
 import numpy as np
 from PIL import Image
 import torch
-from diffusers import StableDiffusionLatentUpscalePipeline, StableDiffusionPipeline
+import cv2
+from diffusers import StableDiffusionLatentUpscalePipeline, StableDiffusionPipeline, ControlNetModel
 from torchvision import transforms
-from config import LOG_FORMAT, LOG_DATE_FORMAT, UPSCALER_MODEL, SD_BASE_MODEL
+from config import (
+    LOG_FORMAT, LOG_DATE_FORMAT, UPSCALER_MODEL, SD_BASE_MODEL,
+    CONTROLNET_MODEL, CONTROLNET_CONDITIONING_SCALE,
+    CONTROL_GUIDANCE_START, CONTROL_GUIDANCE_END
+)
 
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
 logger = logging.getLogger(__name__)
@@ -86,6 +91,44 @@ def apply_controlnet(image: np.ndarray, prompt: str) -> np.ndarray:
     Returns:
         np.ndarray: Processed image as a numpy array.
     """
-    # TODO: Implement ControlNet functionality
-    logger.info("ControlNet functionality not yet implemented")
-    return image
+    try:
+        # Load ControlNet model
+        controlnet = ControlNetModel.from_pretrained(CONTROLNET_MODEL, torch_dtype=dtype)
+        
+        # Load Stable Diffusion pipeline
+        pipe = StableDiffusionPipeline.from_pretrained(SD_BASE_MODEL, controlnet=controlnet, torch_dtype=dtype)
+        pipe.to(device)
+        
+        # Prepare control image (Canny edge detection)
+        control_image = get_canny_image(image)
+        
+        # Generate image
+        output = pipe(
+            prompt,
+            image=control_image,
+            num_inference_steps=20,
+            controlnet_conditioning_scale=CONTROLNET_CONDITIONING_SCALE,
+            control_guidance_start=CONTROL_GUIDANCE_START,
+            control_guidance_end=CONTROL_GUIDANCE_END
+        ).images[0]
+        
+        logger.info("ControlNet processing completed successfully")
+        return np.array(output)
+    except Exception as e:
+        logger.error(f"Error during ControlNet processing: {str(e)}")
+        return image
+
+def get_canny_image(image: np.ndarray) -> Image.Image:
+    """
+    Apply Canny edge detection to the input image.
+    
+    Args:
+        image: Input image as a numpy array.
+    
+    Returns:
+        PIL.Image.Image: Canny edge detected image.
+    """
+    image = cv2.Canny(image, 100, 200)
+    image = image[:, :, None]
+    image = np.concatenate([image, image, image], axis=2)
+    return Image.fromarray(image)
