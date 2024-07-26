@@ -20,6 +20,12 @@ MODEL_HIGH_RES: Final[str] = "PixArt-alpha/PixArt-XL-2-1024-MS"
 UPSCALER_MODEL: Final[str] = "stabilityai/sd-x2-latent-upscaler"
 SD_BASE_MODEL: Final[str] = "CompVis/stable-diffusion-v1-4"
 
+# ControlNet settings
+CONTROLNET_MODEL: Final[str] = "lllyasviel/sd-controlnet-canny"
+CONTROLNET_CONDITIONING_SCALE: Final[float] = 0.5
+CONTROL_GUIDANCE_START: Final[float] = 0.0
+CONTROL_GUIDANCE_END: Final[float] = 1.0
+
 # User input options
 VALID_USER_COMMANDS: Final[set] = {
     "regenerate", "reselect", "stop", "continue", 
@@ -31,7 +37,7 @@ ENHANCEMENT_OPTIONS: Final[List[str]] = ["Freestyle", "Upscaler", "ControlNet", 
 
 # Initial prompt
 INITIAL_PROMPT: Final[str] = """
-A serene forest at dawn with towering, ancient trees draped in moss. A crystal-clear river winds through the landscape, reflecting the soft morning light. At the river's edge, vibrant flowers bloom amid bioluminescent mushrooms. A delicate stone bridge arches over the river, leading to a hidden grove with a mystical waterfall cascading into a shimmering pool.
+Prompt
 """
 
 # Logging configuration
