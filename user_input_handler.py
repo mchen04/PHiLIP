@@ -15,7 +15,7 @@ def handle_user_input() -> str:
     """
     while True:
         user_input = input(
-            "Options: 'regenerate', 'reselect', 'stop', 'continue', 'prompt', 'temperature', or 'restart': "
+            "Options: 'regenerate', 'reselect', 'stop', 'continue', 'prompt', 'temperature', 'restart', or 'change_num_images': "
         ).strip().lower()
         if user_input in VALID_USER_COMMANDS:
             return user_input
