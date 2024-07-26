@@ -17,13 +17,17 @@ os.makedirs(IMAGE_FOLDER, exist_ok=True)
 # Model names
 MODEL_MID_RES: Final[str] = "PixArt-alpha/PixArt-XL-2-512x512"
 MODEL_HIGH_RES: Final[str] = "PixArt-alpha/PixArt-XL-2-1024-MS"
-UPSCALER_MODEL: Final[str] = "stabilityai/stable-diffusion-x4-upscaler"
+UPSCALER_MODEL: Final[str] = "stabilityai/sd-x2-latent-upscaler"
+SD_BASE_MODEL: Final[str] = "CompVis/stable-diffusion-v1-4"
 
 # User input options
 VALID_USER_COMMANDS: Final[set] = {
     "regenerate", "reselect", "stop", "continue", 
     "prompt", "temperature", "restart"
 }
+
+# Enhancement options
+ENHANCEMENT_OPTIONS: Final[List[str]] = ["Freestyle", "Upscaler", "ControlNet", "Pixart", "None"]
 
 # Initial prompt
 INITIAL_PROMPT: Final[str] = """
@@ -41,4 +45,4 @@ BACKUP_COUNT: Final[int] = 3
 TEMPERATURE_PROMPT: Final[str] = "Enter new temperature (suggested range from 0.5 to 1.5): "
 INFERENCE_STEPS_PROMPT: Final[str] = "Enter new number of inference steps (4-50 recommended): "
 NUM_IMAGES_PROMPT: Final[str] = "Enter new number of images to generate (1-9 recommended): "
-ENHANCEMENT_PROMPT: Final[str] = "Select enhancement option (freestyle/pixart/upscale/none): "
+ENHANCEMENT_PROMPT: Final[str] = "Select enhancement option (Freestyle/Upscaler/ControlNet/Pixart/None): "
