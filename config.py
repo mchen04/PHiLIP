@@ -26,6 +26,14 @@ CONTROLNET_CONDITIONING_SCALE: Final[float] = 0.5
 CONTROL_GUIDANCE_START: Final[float] = 0.0
 CONTROL_GUIDANCE_END: Final[float] = 1.0
 
+# Freestyle settings
+FREESTYLE_MODEL: Final[str] = "./stable-diffusion-xl-base-1.0"
+FREESTYLE_UNET: Final[str] = "./stable-diffusion-xl-base-1.0/unet/"
+FREESTYLE_PROMPT_JSON: Final[str] = "./style_prompt.json"
+FREESTYLE_N: Final[int] = 160
+FREESTYLE_B: Final[float] = 2.5
+FREESTYLE_S: Final[int] = 1
+
 # User input options
 VALID_USER_COMMANDS: Final[set] = {
     "regenerate", "reselect", "stop", "continue", 
@@ -37,7 +45,7 @@ ENHANCEMENT_OPTIONS: Final[List[str]] = ["Freestyle", "Upscaler", "ControlNet", 
 
 # Initial prompt
 INITIAL_PROMPT: Final[str] = """
-Create a serene mountain landscape at sunrise with pink and orange skies. Snow-capped peaks reflect the morning light, while a misty, green valley below features a winding crystal-clear river and tall pine trees. Wildflowers add vibrant colors to the tranquil scene.
+"A stunning sunset over a rugged cliffside. The sky is painted with vibrant oranges and pinks, reflecting off the calm ocean below. The cliff is textured with jagged rocks, and a few seagulls fly near the edge, adding a touch of life to the serene scene."
 """
 
 # Logging configuration
