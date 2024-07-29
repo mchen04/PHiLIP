@@ -19,6 +19,7 @@ MODEL_MID_RES: Final[str] = "PixArt-alpha/PixArt-XL-2-512x512"
 MODEL_HIGH_RES: Final[str] = "PixArt-alpha/PixArt-XL-2-1024-MS"
 UPSCALER_MODEL: Final[str] = "stabilityai/sd-x2-latent-upscaler"
 SD_BASE_MODEL: Final[str] = "CompVis/stable-diffusion-v1-4"
+FREESTYLE_MODEL: Final[str] = "stabilityai/stable-diffusion-xl-base-1.0"  
 
 # ControlNet settings
 CONTROLNET_MODEL: Final[str] = "lllyasviel/sd-controlnet-canny"
@@ -27,8 +28,6 @@ CONTROL_GUIDANCE_START: Final[float] = 0.0
 CONTROL_GUIDANCE_END: Final[float] = 1.0
 
 # Freestyle settings
-FREESTYLE_MODEL: Final[str] = "./stable-diffusion-xl-base-1.0"
-FREESTYLE_UNET: Final[str] = "./stable-diffusion-xl-base-1.0/unet/"
 FREESTYLE_PROMPT_JSON: Final[str] = "./style_prompt.json"
 FREESTYLE_N: Final[int] = 160
 FREESTYLE_B: Final[float] = 2.5
@@ -45,7 +44,7 @@ ENHANCEMENT_OPTIONS: Final[List[str]] = ["Freestyle", "Upscaler", "ControlNet", 
 
 # Initial prompt
 INITIAL_PROMPT: Final[str] = """
-"A stunning sunset over a rugged cliffside. The sky is painted with vibrant oranges and pinks, reflecting off the calm ocean below. The cliff is textured with jagged rocks, and a few seagulls fly near the edge, adding a touch of life to the serene scene."
+Explore the Shadow Dungeon, a dark cavern lit by spectral blue flames and lined with ancient runes. Navigate a labyrinth filled with shadow creatures to reach the Shadow Monarch's throne room, dominated by an obsidian throne and intense magical energy. 
 """
 
 # Logging configuration
