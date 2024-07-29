@@ -1,3 +1,5 @@
+# generate_image.py
+
 import numpy as np
 import torch
 from diffusers import PixArtAlphaPipeline
@@ -11,7 +13,8 @@ from config import MODEL_MID_RES, MODEL_HIGH_RES, LOG_FORMAT, LOG_DATE_FORMAT
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
 logger = logging.getLogger(__name__)
 
-def get_device():
+def get_device() -> torch.device:
+    """Determine and return the appropriate device for computation."""
     if torch.cuda.is_available():
         device = torch.device("cuda")
         device_name = torch.cuda.get_device_name(0)
@@ -66,32 +69,27 @@ def generate_images(prompt: str, num_images: int = 1, resolution: int = 512, tem
         with torch.no_grad():
             if device.type == "cuda":
                 with torch.autocast(device_type="cuda", dtype=dtype):
-                    results = pipe(
-                        [prompt] * num_images,
-                        num_images_per_prompt=1,
-                        height=resolution,
-                        width=resolution,
-                        guidance_scale=temp,
-                        image=input_images,
-                        num_inference_steps=steps,
-                        callback=lambda i, t, x: tqdm.write(f"Step {i}/{steps}", end="\r")
-                    )
+                    results = generate_with_pipeline(pipe, prompt, num_images, resolution, temp, input_images, steps)
             else:
-                results = pipe(
-                    [prompt] * num_images,
-                    num_images_per_prompt=1,
-                    height=resolution,
-                    width=resolution,
-                    guidance_scale=temp,
-                    image=input_images,
-                    num_inference_steps=steps,
-                    callback=lambda i, t, x: tqdm.write(f"Step {i}/{steps}", end="\r")
-                )
+                results = generate_with_pipeline(pipe, prompt, num_images, resolution, temp, input_images, steps)
         logger.info(f"Generated {num_images} images successfully")
         return [np.array(image) for image in results.images]
     except Exception as e:
         logger.error(f"Error during image generation: {str(e)}")
         return []
+
+def generate_with_pipeline(pipe, prompt, num_images, resolution, temp, input_images, steps):
+    """Helper function to generate images with the pipeline."""
+    return pipe(
+        [prompt] * num_images,
+        num_images_per_prompt=1,
+        height=resolution,
+        width=resolution,
+        guidance_scale=temp,
+        image=input_images,
+        num_inference_steps=steps,
+        callback=lambda i, t, x: tqdm.write(f"Step {i}/{steps}", end="\r")
+    )
 
 def process_base_images(base_images: Union[List[np.ndarray], np.ndarray], device: torch.device) -> torch.Tensor:
     """
