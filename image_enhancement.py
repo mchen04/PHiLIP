@@ -1,25 +1,28 @@
+# image_enhancement.py
+
 import logging
-from typing import Tuple, List
+from typing import Tuple, List, Dict
 import numpy as np
 from PIL import Image
 import torch
 import cv2
 import json
+import re
 from diffusers import DiffusionPipeline, StableDiffusionLatentUpscalePipeline, StableDiffusionControlNetPipeline, ControlNetModel
 from torchvision import transforms
 from config import (
     LOG_FORMAT, LOG_DATE_FORMAT, UPSCALER_MODEL, SD_BASE_MODEL,
     CONTROLNET_MODEL, CONTROLNET_CONDITIONING_SCALE,
     CONTROL_GUIDANCE_START, CONTROL_GUIDANCE_END,
-    FREESTYLE_PROMPT_JSON,
-    FREESTYLE_N, FREESTYLE_B, FREESTYLE_S,
-    MODEL_HIGH_RES
+    FREESTYLE_PROMPT_JSON, FREESTYLE_N, FREESTYLE_B, FREESTYLE_S,
+    MODEL_HIGH_RES, FREESTYLE_MODEL
 )
 
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
 logger = logging.getLogger(__name__)
 
-def get_device():
+def get_device() -> torch.device:
+    """Determine and return the appropriate device for computation."""
     if torch.cuda.is_available():
         device = torch.device("cuda")
         device_name = torch.cuda.get_device_name(0)
@@ -37,7 +40,7 @@ device = get_device()
 # Use mixed precision for GPU, full precision for CPU
 dtype = torch.float16 if device.type == "cuda" else torch.float32
 
-def load_style_prompts() -> List[dict]:
+def load_style_prompts() -> List[Dict[str, str]]:
     """Load and return the style prompts from the JSON file."""
     try:
         with open(FREESTYLE_PROMPT_JSON, 'r') as f:
@@ -46,7 +49,7 @@ def load_style_prompts() -> List[dict]:
         logger.error(f"Error loading style prompts: {str(e)}")
         return []
 
-def select_style_prompt(style_prompts: List[dict]) -> dict:
+def select_style_prompt(style_prompts: List[Dict[str, str]]) -> Dict[str, str]:
     """Prompt the user to select a style from the available options."""
     print("Available styles:")
     for i, style in enumerate(style_prompts):
@@ -74,51 +77,94 @@ def apply_freestyle(image: np.ndarray, prompt: str) -> np.ndarray:
         np.ndarray: Processed image as a numpy array.
     """
     try:
-        # Load the pipeline directly from Hugging Face
-        pipe = DiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0", torch_dtype=dtype)
+        pipe = DiffusionPipeline.from_pretrained(FREESTYLE_MODEL, torch_dtype=dtype)
         pipe.to(device)
 
-        # Load style prompts
         style_prompts = load_style_prompts()
         if not style_prompts:
             raise ValueError("No style prompts available.")
 
-        # Let the user select a style
         selected_style = select_style_prompt(style_prompts)
+        
+        # Combine prompts and handle potential token limit
+        full_prompt, neg_prompt = combine_prompts(prompt, selected_style)
 
-        # Combine user prompt with selected style prompt
-        full_prompt = f"{prompt}, {selected_style['prompt']}"
-
-        # Prepare the input image
         input_image = Image.fromarray(image).resize((1024, 1024))
 
-        # Generate the stylized image
         with torch.no_grad():
-            if device.type == "cuda":
-                with torch.autocast(device_type="cuda", dtype=dtype):
-                    result = pipe(
-                        prompt=full_prompt,
-                        image=input_image,
-                        num_inference_steps=10,
-                        guidance_scale=5,
-                        num_images_per_prompt=1,
-                        negative_prompt=selected_style.get('negative_prompt', ''),
-                    ).images[0]
-            else:
-                result = pipe(
-                    prompt=full_prompt,
-                    image=input_image,
-                    num_inference_steps=10,
-                    guidance_scale=5,
-                    num_images_per_prompt=1,
-                    negative_prompt=selected_style.get('negative_prompt', ''),
-                ).images[0]
+            result = generate_image_with_pipeline(pipe, full_prompt, input_image, neg_prompt)
 
         logger.info(f"Freestyle processing completed successfully using {selected_style['name']} style")
         return np.array(result)
     except Exception as e:
         logger.error(f"Error during Freestyle processing: {str(e)}")
+        logger.warning("Falling back to original image due to Freestyle processing error.")
         return image
+
+def combine_prompts(user_prompt: str, style: Dict[str, str], max_tokens: int = 77) -> Tuple[str, str]:
+    """
+    Combine user prompt with style prompt, ensuring it doesn't exceed the token limit.
+    Truncates the negative prompt if necessary to fit within the token limit.
+    
+    Args:
+        user_prompt: The user's input prompt.
+        style: The selected style dictionary.
+        max_tokens: Maximum number of tokens allowed (default is 77 for SDXL).
+    
+    Returns:
+        Tuple[str, str]: Combined positive prompt and negative prompt.
+    """
+    def count_tokens(text: str) -> int:
+        # This is a simple approximation. For more accurate counting, consider using a tokenizer.
+        return len(re.findall(r'\w+', text))
+
+    user_tokens = count_tokens(user_prompt)
+    style_tokens = count_tokens(style['prompt'])
+    neg_tokens = count_tokens(style.get('negative_prompt', ''))
+
+    # Combine user prompt and style prompt
+    full_prompt = f"{user_prompt}, {style['prompt']}"
+    full_prompt_tokens = user_tokens + style_tokens
+
+    # Calculate remaining tokens for negative prompt
+    remaining_tokens = max_tokens - full_prompt_tokens
+
+    # Truncate negative prompt if necessary
+    if neg_tokens > remaining_tokens:
+        words = style['negative_prompt'].split()
+        neg_prompt = ' '.join(words[:remaining_tokens])
+        logger.warning(f"Negative prompt truncated to fit within token limit. Original: {style['negative_prompt']}, Truncated: {neg_prompt}")
+    else:
+        neg_prompt = style.get('negative_prompt', '')
+
+    # If negative prompt is completely removed, log a warning
+    if not neg_prompt:
+        logger.warning("Negative prompt completely removed due to token limit.")
+
+    return full_prompt, neg_prompt
+
+def generate_image_with_pipeline(pipe, prompt: str, image: Image.Image, negative_prompt: str) -> Image.Image:
+    """Generate image using the provided pipeline and parameters."""
+    if device.type == "cuda":
+        with torch.autocast(device_type="cuda", dtype=dtype):
+            result = pipe(
+                prompt=prompt,
+                image=image,
+                num_inference_steps=10,
+                guidance_scale=5,
+                num_images_per_prompt=1,
+                negative_prompt=negative_prompt,
+            ).images[0]
+    else:
+        result = pipe(
+            prompt=prompt,
+            image=image,
+            num_inference_steps=10,
+            guidance_scale=5,
+            num_images_per_prompt=1,
+            negative_prompt=negative_prompt,
+        ).images[0]
+    return result
 
 def latent_upscale_image(image: Image.Image, prompt: str, output_size: Tuple[int, int] = (1024, 1024)) -> np.ndarray:
     """
@@ -136,23 +182,8 @@ def latent_upscale_image(image: Image.Image, prompt: str, output_size: Tuple[int
         sd_pipeline = StableDiffusionLatentUpscalePipeline.from_pretrained(UPSCALER_MODEL, torch_dtype=dtype)
         sd_pipeline.to(device)
         
-        # Upscale the image
         with torch.no_grad():
-            if device.type == "cuda":
-                with torch.autocast(device_type="cuda", dtype=dtype):
-                    upscaled_image = sd_pipeline(
-                        prompt=prompt,
-                        image=image.resize((512, 512)),  # Resize to 512x512 as required by the upscaler
-                        num_inference_steps=10,
-                        guidance_scale=0,
-                    ).images[0]
-            else:
-                upscaled_image = sd_pipeline(
-                    prompt=prompt,
-                    image=image.resize((512, 512)),
-                    num_inference_steps=10,
-                    guidance_scale=0,
-                ).images[0]
+            upscaled_image = generate_image_with_pipeline(sd_pipeline, prompt, image.resize((512, 512)), "")
         
         upscaled_image = upscaled_image.resize(output_size, Image.LANCZOS)
         
@@ -175,10 +206,7 @@ def apply_controlnet(image: np.ndarray, prompt: str) -> np.ndarray:
         np.ndarray: Processed image as a numpy array at 1024x1024 resolution.
     """
     try:
-        # Load ControlNet model
         controlnet = ControlNetModel.from_pretrained(CONTROLNET_MODEL, torch_dtype=dtype)
-        
-        # Load Stable Diffusion pipeline
         pipe = StableDiffusionControlNetPipeline.from_pretrained(
             SD_BASE_MODEL,
             controlnet=controlnet,
@@ -186,43 +214,43 @@ def apply_controlnet(image: np.ndarray, prompt: str) -> np.ndarray:
         )
         pipe.to(device)
         
-        # Prepare control image (Canny edge detection)
-        control_image = get_canny_image(image)
+        control_image = get_canny_image(image).resize((1024, 1024), Image.LANCZOS)
         
-        # Resize control image to 1024x1024
-        control_image = control_image.resize((1024, 1024), Image.LANCZOS)
-        
-        # Generate image
         with torch.no_grad():
-            if device.type == "cuda":
-                with torch.autocast(device_type="cuda", dtype=dtype):
-                    output = pipe(
-                        prompt,
-                        image=control_image,
-                        num_inference_steps=10,
-                        controlnet_conditioning_scale=CONTROLNET_CONDITIONING_SCALE,
-                        control_guidance_start=CONTROL_GUIDANCE_START,
-                        control_guidance_end=CONTROL_GUIDANCE_END,
-                        height=1024,
-                        width=1024
-                    ).images[0]
-            else:
-                output = pipe(
-                    prompt,
-                    image=control_image,
-                    num_inference_steps=10,
-                    controlnet_conditioning_scale=CONTROLNET_CONDITIONING_SCALE,
-                    control_guidance_start=CONTROL_GUIDANCE_START,
-                    control_guidance_end=CONTROL_GUIDANCE_END,
-                    height=1024,
-                    width=1024
-                ).images[0]
+            output = generate_controlnet_image(pipe, prompt, control_image)
         
         logger.info("ControlNet processing completed successfully at 1024x1024 resolution")
         return np.array(output)
     except Exception as e:
         logger.error(f"Error during ControlNet processing: {str(e)}")
         return cv2.resize(image, (1024, 1024))  # Fallback to simple resize
+
+def generate_controlnet_image(pipe, prompt: str, control_image: Image.Image) -> Image.Image:
+    """Generate image using ControlNet pipeline."""
+    if device.type == "cuda":
+        with torch.autocast(device_type="cuda", dtype=dtype):
+            output = pipe(
+                prompt,
+                image=control_image,
+                num_inference_steps=10,
+                controlnet_conditioning_scale=CONTROLNET_CONDITIONING_SCALE,
+                control_guidance_start=CONTROL_GUIDANCE_START,
+                control_guidance_end=CONTROL_GUIDANCE_END,
+                height=1024,
+                width=1024
+            ).images[0]
+    else:
+        output = pipe(
+            prompt,
+            image=control_image,
+            num_inference_steps=10,
+            controlnet_conditioning_scale=CONTROLNET_CONDITIONING_SCALE,
+            control_guidance_start=CONTROL_GUIDANCE_START,
+            control_guidance_end=CONTROL_GUIDANCE_END,
+            height=1024,
+            width=1024
+        ).images[0]
+    return output
 
 def get_canny_image(image: np.ndarray) -> Image.Image:
     """
@@ -252,32 +280,13 @@ def apply_pixart(image: np.ndarray, prompt: str, temperature: float) -> np.ndarr
         np.ndarray: Processed image as a numpy array.
     """
     try:
-        # Load the PixArtAlpha pipeline for high resolution
         pipe = DiffusionPipeline.from_pretrained(MODEL_HIGH_RES, torch_dtype=dtype)
         pipe.to(device)
 
-        # Prepare the input image
         input_image = Image.fromarray(image).resize((1024, 1024))
 
-        # Generate the enhanced image
         with torch.no_grad():
-            if device.type == "cuda":
-                with torch.autocast(device_type="cuda", dtype=dtype):
-                    result = pipe(
-                        prompt=prompt,
-                        image=input_image,
-                        num_inference_steps=10,
-                        guidance_scale=temperature,
-                        num_images_per_prompt=1,
-                    ).images[0]
-            else:
-                result = pipe(
-                    prompt=prompt,
-                    image=input_image,
-                    num_inference_steps=10,
-                    guidance_scale=temperature,
-                    num_images_per_prompt=1,
-                ).images[0]
+            result = generate_pixart_image(pipe, prompt, input_image, temperature)
 
         logger.info("Pixart enhancement completed successfully")
         return np.array(result)
@@ -285,18 +294,37 @@ def apply_pixart(image: np.ndarray, prompt: str, temperature: float) -> np.ndarr
         logger.error(f"Error during Pixart enhancement: {str(e)}")
         return image
 
+def generate_pixart_image(pipe, prompt: str, image: Image.Image, temperature: float) -> Image.Image:
+    """Generate image using Pixart pipeline."""
+    if device.type == "cuda":
+        with torch.autocast(device_type="cuda", dtype=dtype):
+            result = pipe(
+                prompt=prompt,
+                image=image,
+                num_inference_steps=10,
+                guidance_scale=temperature,
+                num_images_per_prompt=1,
+            ).images[0]
+    else:
+        result = pipe(
+            prompt=prompt,
+            image=image,
+            num_inference_steps=10,
+            guidance_scale=temperature,
+            num_images_per_prompt=1,
+        ).images[0]
+    return result
+
 def apply_enhancement(image: np.ndarray, prompt: str, enhancement_option: str, temperature: float = 5.0) -> np.ndarray:
     """Apply the selected enhancement to the image."""
-    if enhancement_option == "Freestyle":
-        return apply_freestyle(image, prompt)
-    elif enhancement_option == "Upscaler":
-        return latent_upscale_image(Image.fromarray(image), prompt)
-    elif enhancement_option == "ControlNet":
-        return apply_controlnet(image, prompt)
-    elif enhancement_option == "Pixart":
-        return apply_pixart(image, prompt, temperature)
-    else:  # None
-        return image
+    enhancement_functions = {
+        "Freestyle": apply_freestyle,
+        "Upscaler": lambda img, p: latent_upscale_image(Image.fromarray(img), p),
+        "ControlNet": apply_controlnet,
+        "Pixart": lambda img, p: apply_pixart(img, p, temperature),
+        "None": lambda img, _: img
+    }
+    return enhancement_functions.get(enhancement_option, lambda img, _: img)(image, prompt)
 
 # Print PyTorch and CUDA versions for debugging
 logger.info(f"PyTorch version: {torch.__version__}")
