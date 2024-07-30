@@ -42,9 +42,9 @@ VALID_USER_COMMANDS: Final[set] = {
 # Enhancement options
 ENHANCEMENT_OPTIONS: Final[List[str]] = ["Freestyle", "Upscaler", "ControlNet", "Pixart", "None"]
 
-# Initial prompt
+# Initial prompt (225 chars -> barely truncate)
 INITIAL_PROMPT: Final[str] = """
-Explore the Shadow Dungeon, a dark cavern lit by spectral blue flames and lined with ancient runes. Navigate a labyrinth filled with shadow creatures to reach the Shadow Monarch's throne room, dominated by an obsidian throne and intense magical energy. 
+Create an image of two sleek sports cars competing in a high-stakes drift battle in an urban setting at night. The scene features intense drifting with glowing underglow lights, smoking tires, and a crowd of spectators watching from the sidelines.
 """
 
 # Logging configuration
