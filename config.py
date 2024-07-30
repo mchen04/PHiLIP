@@ -6,8 +6,8 @@ import logging
 
 # Image generation settings
 RESOLUTIONS: Final[List[int]] = [512, 1024]
-NUM_IMAGES_LIST: Final[List[int]] = [9, 1]
-INFERENCE_STEPS_LIST: Final[List[int]] = [4, 10]
+NUM_IMAGES_LIST: Final[List[int]] = [1, 4, 9]
+INFERENCE_STEPS_LIST: Final[List[int]] = [10, 25, 50]
 DEFAULT_TEMPERATURE: Final[float] = 1.0
 
 # File paths
@@ -56,6 +56,6 @@ BACKUP_COUNT: Final[int] = 3
 
 # User input prompts
 TEMPERATURE_PROMPT: Final[str] = "Enter new temperature (suggested range from 0.5 to 1.5): "
-INFERENCE_STEPS_PROMPT: Final[str] = "Enter new number of inference steps (4-50 recommended): "
+INFERENCE_STEPS_PROMPT: Final[str] = "Enter new number of inference steps (10-50 recommended): "
 NUM_IMAGES_PROMPT: Final[str] = "Enter new number of images to generate (1-9 recommended): "
 ENHANCEMENT_PROMPT: Final[str] = "Select enhancement option (Freestyle/Upscaler/ControlNet/Pixart/None): "
