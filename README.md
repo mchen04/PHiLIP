@@ -12,5 +12,6 @@ An image-generation and enhancement prototype built with Python, PyTorch, and Hu
 ## Current limits
 
 The generation route passes multiple arguments to a loop function that accepts one argument.
+The settings route references configuration names that `main.py` does not import.
 The dependency snapshot is named [requiremets.txt](requiremets.txt) and includes machine-specific local paths.
 Model loading and end-to-end operation are not verified here, so this document provides no installation recipe.
